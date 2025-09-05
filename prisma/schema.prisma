@@ -9,21 +9,43 @@ datasource db {
 }
 
 model User {
-  id          Int      @id @default(autoincrement())
-  phoneNumber String   @unique
-  name        String?
-  createdAt   DateTime @default(now())
-
-  OTP OTP[]
+  id           Int           @id @default(autoincrement())
+  name         String?
+  password     String?       // Пароль для админов
+  createdAt    DateTime      @default(now())
+  phoneNumber  String        @unique
+  balance      Float         @default(0)
+  role         UserRole      @default(CLIENT)
+  updatedAt    DateTime      @updatedAt
+  OTP          OTP[]
+  transactions Transaction[]
 }
 
 model OTP {
   id          Int      @id @default(autoincrement())
-  userId      Int?
-  user        User?    @relation(fields: [userId], references: [id])
-  phoneNumber String
+  createdAt   DateTime @default(now())
   code        String
   expiresAt   DateTime
   isUsed      Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  phoneNumber String
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
+}
+
+model Transaction {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  productId      String
+  productName    String
+  productPrice   Float
+  cashbackAmount Float
+  balanceBefore  Float
+  balanceAfter   Float
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id])
+}
+
+enum UserRole {
+  CLIENT
+  ADMIN
 }

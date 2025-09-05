@@ -4,10 +4,11 @@ import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
-import { UserService } from './user/user.service';
+import { CashbackModule } from './cashback/cashback.module';
+import { SupabaseModule } from './supabase/supabase.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UserModule],
+  imports: [PrismaModule, AuthModule, UserModule, CashbackModule, SupabaseModule],
   controllers: [AppController],
   providers: [AppService],
 })

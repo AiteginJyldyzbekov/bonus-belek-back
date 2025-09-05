@@ -9,14 +9,13 @@ export class OtpController {
     async generateOtp(@Body() body: { phoneNumber: string }) {
         try {
             const otpCode = await this.otpService.generateOtp(body.phoneNumber);
-            
+
             // В реальном приложении здесь должна быть отправка SMS
             // Пока возвращаем код для тестирования
             return {
                 statusCode: 200,
                 message: 'OTP sent successfully',
                 phoneNumber: body.phoneNumber,
-                otp: otpCode // Удалить в продакшене
             };
         } catch (error) {
             throw new HttpException('Failed to generate OTP', HttpStatus.INTERNAL_SERVER_ERROR);
@@ -27,7 +26,7 @@ export class OtpController {
     async verifyOtp(@Body() body: { phoneNumber: string; code: string }) {
         try {
             const isValid = await this.otpService.verifyOtp(body.phoneNumber, body.code);
-            
+
             if (!isValid) {
                 throw new HttpException('Invalid or expired OTP', HttpStatus.BAD_REQUEST);
             }

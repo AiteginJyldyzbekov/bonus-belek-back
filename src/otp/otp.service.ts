@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
+import axios from "axios";
 import { PrismaService } from "src/prisma/prisma.service";
 
 @Injectable()
@@ -44,6 +45,24 @@ export class OtpService {
             // Генерируем новый OTP
             const otpCode = this.generateOtpCode();
             const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 минут
+
+            axios.post("http://31.3.216.144:3000/api/whatsapp/send-otp", {
+                phoneNumber,
+                otpCode
+            }, {
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-api-key": "slb9ZjX1kMnIFmeD-mAYb5cgEBLpWmCyj"
+                }
+            })
+                .then(response => {
+                    console.log('OTP sent successfully:', response.data);
+                })
+                .catch(error => {
+                    console.error('Error sending OTP:', error);
+                });
+
+
 
             // Сохраняем OTP в базу данных
             await this.prismaService.oTP.create({
@@ -106,6 +125,24 @@ export class OtpService {
         } catch (error) {
             console.error('Failed to cleanup expired OTPs:', error);
         }
+    }
+
+    sendOtpWhatsApp(phoneNumber: string, otpCode: string) {
+        axios.post("http://192.168.0.104:3000/api/whatsapp/send-otp", {
+            phoneNumber,
+            otpCode
+        }, {
+            headers: {
+                "Content-Type": "application/json",
+                "x-api-key": "slb9ZjX1kMnIFmeD-mAYb5cgEBLpWmCyj"
+            }
+        })
+            .then(response => {
+                console.log('OTP sent successfully:', response.data);
+            })
+            .catch(error => {
+                console.error('Error sending OTP:', error);
+            });
     }
 
     // Метод для получения информации о последнем OTP (для отладки)

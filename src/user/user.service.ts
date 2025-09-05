@@ -1,9 +1,12 @@
 
-import { Injectable } from "@nestjs/common";
+import { Injectable, HttpException, HttpStatus, ConflictException, InternalServerErrorException, Logger } from "@nestjs/common";
+import { AdminRegDto, CreateUserDto, Roles } from "src/auth/dto/auth.dto";
 import { PrismaService } from "src/prisma/prisma.service";
 
 @Injectable()
 export class UserService {
+    private readonly logger = new Logger(UserService.name);
+
     constructor(private prisma: PrismaService) { }
 
     async phoneNumber(phoneNumber: string) {
@@ -12,26 +15,176 @@ export class UserService {
         });
     }
 
-    async create(data: { phoneNumber: string; password?: string, name?: string }) {
-        return this.prisma.user.create({
-            data,
+    async create(data: CreateUserDto) {
+        try {
+            this.logger.log(`Creating user with data: ${JSON.stringify(data, null, 2)}`);
+            
+            const result = await this.prisma.user.create({
+                data: {
+                    phoneNumber: data.phoneNumber,
+                    password: data.password || null, // Пароль может быть null для клиентов
+                    name: data.name,
+                    role: data.role,
+                },
+            });
+            
+            this.logger.log(`User created successfully with ID: ${result.id}`);
+            return result;
+            
+        } catch (error) {
+            this.logger.error(`Failed to create user: ${error.message}`, error.stack);
+            
+            if (error.code === 'P2002') { // Prisma unique constraint error
+                this.logger.warn(`Unique constraint violation for phone number: ${data.phoneNumber}`);
+                throw new ConflictException('User with this phone number already exists');
+            }
+            
+            // Логируем детали ошибки для диагностики
+            if (error.code) {
+                this.logger.error(`Database error code: ${error.code}`);
+            }
+            if (error.meta) {
+                this.logger.error(`Database error meta: ${JSON.stringify(error.meta)}`);
+            }
+            
+            throw new InternalServerErrorException(`Failed to create user: ${error.message}`);
+        }
+    }
+
+    async findByPhoneNumber(phoneNumber: string) {
+        return this.prisma.user.findUnique({
+            where: { phoneNumber }
         });
     }
 
-    async update(id: number, data: { name?: string; password?: string }) {
+    async update(id: number, data: { name?: string; password?: string; role?: 'CLIENT' | 'ADMIN' }) {
         return this.prisma.user.update({
             where: { id },
             data,
         });
     }
 
-    async createOrFindByPhone(phoneNumber: string) {
+    async createOrFindByPhone(phoneNumber: string, name: string, role: Roles) {
         let user = await this.phoneNumber(phoneNumber);
-        
+
         if (!user) {
-            user = await this.create({ phoneNumber });
+            user = await this.create({
+                phoneNumber, 
+                name, 
+                role,
+                password: role === Roles.ADMIN ? "" : null // Только для админов нужен пароль
+            });
         }
-        
+
         return user;
+    }
+
+    async getBalance(phoneNumber: string) {
+        const user = await this.phoneNumber(phoneNumber);
+
+        if (!user) {
+            throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+        }
+
+        return {
+            phoneNumber: user.phoneNumber,
+            balance: user.balance,
+            name: user.name
+        };
+    }
+
+    async getTransactions(phoneNumber: string) {
+        const user = await this.phoneNumber(phoneNumber);
+
+        if (!user) {
+            throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+        }
+
+        const transactions = await this.prisma.transaction.findMany({
+            where: { userId: user.id },
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                productId: true,
+                productName: true,
+                productPrice: true,
+                cashbackAmount: true,
+                balanceBefore: true,
+                balanceAfter: true,
+                createdAt: true
+            }
+        });
+
+        return {
+            phoneNumber: user.phoneNumber,
+            name: user.name,
+            transactions
+        };
+    }
+
+    async addCashback(phoneNumber: string, cashbackAmount: number, productData: {
+        productId: string;
+        productName: string;
+        productPrice: number;
+    }) {
+        return await this.prisma.$transaction(async (prisma) => {
+            // Получаем пользователя с блокировкой для обновления
+            const user = await prisma.user.findUnique({
+                where: { phoneNumber },
+                select: { id: true, balance: true }
+            });
+
+            if (!user) {
+                throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+            }
+
+            const balanceBefore = user.balance;
+            const balanceAfter = balanceBefore + cashbackAmount;
+
+            // Обновляем баланс пользователя
+            const updatedUser = await prisma.user.update({
+                where: { id: user.id },
+                data: { balance: balanceAfter }
+            });
+
+            // Создаем запись о транзакции
+            const transaction = await prisma.transaction.create({
+                data: {
+                    userId: user.id,
+                    productId: productData.productId,
+                    productName: productData.productName,
+                    productPrice: productData.productPrice,
+                    cashbackAmount,
+                    balanceBefore,
+                    balanceAfter
+                }
+            });
+
+            return {
+                user: {
+                    id: updatedUser.id,
+                    phoneNumber: updatedUser.phoneNumber,
+                    name: updatedUser.name,
+                    balance: updatedUser.balance
+                },
+                transaction: {
+                    id: transaction.id,
+                    cashbackAmount: transaction.cashbackAmount,
+                    balanceBefore: transaction.balanceBefore,
+                    balanceAfter: transaction.balanceAfter,
+                    createdAt: transaction.createdAt
+                }
+            };
+        });
+    }
+
+    async setUserRole(phoneNumber: string, role: 'CLIENT' | 'ADMIN') {
+        const user = await this.phoneNumber(phoneNumber);
+
+        if (!user) {
+            throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+        }
+
+        return await this.update(user.id, { role });
     }
 }
