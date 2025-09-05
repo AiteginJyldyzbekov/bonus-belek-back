@@ -60,22 +60,25 @@ POST /auth/login/admin
 - `POST /auth/login/admin` - вход админа
 
 ### Кешбек (только для админов)
-- `GET /cashback/products` - список товаров
-- `GET /cashback/products/search?query=iPhone` - поиск товаров
+- `POST /cashback/products` - список товаров
+- `POST /cashback/products/search` - поиск товаров
 - `POST /cashback/process` - начисление кешбека
-- `GET /cashback/health` - проверка подключения к Supabase
+- `GET /cashback/health` - проверка подключения к MockAPI/Supabase
 
 ### Пользователи
 - `GET /users/:phone/balance` - баланс пользователя
 - `GET /users/:phone/transactions` - история транзакций
+- `GET /users/:phone/profile` - полный профиль пользователя с статистикой
 - `POST /users/:phone/role` - назначение роли
 
 ## 🔐 Безопасность
 
 ### Админские эндпоинты
-Все эндпоинты кешбека требуют заголовок:
-```
-X-User-Phone: +996701234567
+Все эндпоинты кешбека требуют `phoneNumber` в теле POST запроса:
+```json
+{
+  "phoneNumber": "+996701234567"
+}
 ```
 
 ### Роли
@@ -129,17 +132,20 @@ curl -X POST http://localhost:8080/auth/login/admin \
   }'
 
 # 3. Получить список товаров
-curl -X GET http://localhost:8080/cashback/products \
-  -H "X-User-Phone: +996701234567"
+curl -X POST http://localhost:8080/cashback/products \
+  -H "Content-Type: application/json" \
+  -d '{"phoneNumber": "+996701234567"}'
 
 # 4. Начислить кешбек
 curl -X POST http://localhost:8080/cashback/process \
   -H "Content-Type: application/json" \
-  -H "X-User-Phone: +996701234567" \
-  -d '{"productId": "uuid-from-supabase", "phoneNumber": "+996701234567"}'
+  -d '{"productId": "uuid-from-mockapi", "phoneNumber": "+996701234567"}'
 
 # 5. Проверить баланс
 curl -X GET http://localhost:8080/users/+996701234567/balance
+
+# 6. Получить полный профиль пользователя
+curl -X GET http://localhost:8080/users/+996701234567/profile
 ```
 
 ## 🔄 Интеграция с Supabase

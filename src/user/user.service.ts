@@ -18,7 +18,7 @@ export class UserService {
     async create(data: CreateUserDto) {
         try {
             this.logger.log(`Creating user with data: ${JSON.stringify(data, null, 2)}`);
-            
+
             const result = await this.prisma.user.create({
                 data: {
                     phoneNumber: data.phoneNumber,
@@ -27,18 +27,18 @@ export class UserService {
                     role: data.role,
                 },
             });
-            
+
             this.logger.log(`User created successfully with ID: ${result.id}`);
             return result;
-            
+
         } catch (error) {
             this.logger.error(`Failed to create user: ${error.message}`, error.stack);
-            
+
             if (error.code === 'P2002') { // Prisma unique constraint error
                 this.logger.warn(`Unique constraint violation for phone number: ${data.phoneNumber}`);
                 throw new ConflictException('User with this phone number already exists');
             }
-            
+
             // Логируем детали ошибки для диагностики
             if (error.code) {
                 this.logger.error(`Database error code: ${error.code}`);
@@ -46,7 +46,7 @@ export class UserService {
             if (error.meta) {
                 this.logger.error(`Database error meta: ${JSON.stringify(error.meta)}`);
             }
-            
+
             throw new InternalServerErrorException(`Failed to create user: ${error.message}`);
         }
     }
@@ -69,8 +69,8 @@ export class UserService {
 
         if (!user) {
             user = await this.create({
-                phoneNumber, 
-                name, 
+                phoneNumber,
+                name,
                 role,
                 password: role === Roles.ADMIN ? "" : null // Только для админов нужен пароль
             });
@@ -122,6 +122,84 @@ export class UserService {
         };
     }
 
+    async getUserProfile(phoneNumber: string) {
+        const user = await this.findByPhoneNumber(phoneNumber);
+        if (!user) {
+            throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+        }
+
+        // Получаем все транзакции пользователя
+        const transactions = await this.prisma.transaction.findMany({
+            where: { userId: user.id },
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                productId: true,
+                productName: true,
+                productPrice: true,
+                cashbackAmount: true,
+                balanceBefore: true,
+                balanceAfter: true,
+                createdAt: true
+            }
+        });
+
+        // Подсчитываем статистику
+        const totalTransactions = transactions.length;
+        const totalCashbackEarned = transactions.reduce((sum, transaction) => sum + transaction.cashbackAmount, 0);
+        const totalSpent = transactions.reduce((sum, transaction) => sum + transaction.productPrice, 0);
+        
+        // Получаем последнюю транзакцию
+        const lastTransaction = transactions.length > 0 ? transactions[0] : null;
+
+        // Получаем топ товары (по количеству покупок)
+        const productStats = transactions.reduce((acc, transaction) => {
+            const productName = transaction.productName;
+            if (!acc[productName]) {
+                acc[productName] = {
+                    name: productName,
+                    count: 0,
+                    totalSpent: 0,
+                    totalCashback: 0
+                };
+            }
+            acc[productName].count++;
+            acc[productName].totalSpent += transaction.productPrice;
+            acc[productName].totalCashback += transaction.cashbackAmount;
+            return acc;
+        }, {} as Record<string, any>);
+
+        const topProducts = Object.values(productStats)
+            .sort((a: any, b: any) => b.count - a.count)
+            .slice(0, 5);
+
+        return {
+            statusCode: 200,
+            message: 'User profile retrieved successfully',
+            data: {
+                user: {
+                    id: user.id,
+                    phoneNumber: user.phoneNumber,
+                    name: user.name,
+                    role: user.role,
+                    balance: user.balance,
+                    createdAt: user.createdAt,
+                    updatedAt: user.updatedAt
+                },
+                statistics: {
+                    totalTransactions,
+                    totalCashbackEarned: Math.round(totalCashbackEarned * 10) / 10, // Округляем до 1 знака
+                    totalSpent: Math.round(totalSpent * 10) / 10,
+                    averageCashbackPerTransaction: totalTransactions > 0 ? Math.round((totalCashbackEarned / totalTransactions) * 10) / 10 : 0,
+                    lastTransactionDate: lastTransaction?.createdAt || null
+                },
+                recentTransactions: transactions.slice(0, 10), // Последние 10 транзакций
+                topProducts,
+                allTransactions: transactions
+            }
+        };
+    }
+
     async addCashback(phoneNumber: string, cashbackAmount: number, productData: {
         productId: string;
         productName: string;
@@ -153,7 +231,7 @@ export class UserService {
                     userId: user.id,
                     productId: productData.productId,
                     productName: productData.productName,
-                    productPrice: productData.productPrice,
+                    productPrice: productData.productPrice, // Преобразуем строку в число
                     cashbackAmount,
                     balanceBefore,
                     balanceAfter

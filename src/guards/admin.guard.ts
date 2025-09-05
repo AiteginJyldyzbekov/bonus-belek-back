@@ -7,10 +7,10 @@ export class AdminGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const phoneNumber = request.headers['x-user-phone'];
+    const phoneNumber = request.body?.phoneNumber;
 
     if (!phoneNumber) {
-      throw new UnauthorizedException('Phone number is required');
+      throw new UnauthorizedException('Phone number is required in request body');
     }
 
     const user = await this.prisma.user.findUnique({

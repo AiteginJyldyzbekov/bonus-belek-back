@@ -1,10 +1,11 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { UserService } from '../user/user.service';
 import { SupabaseService } from '../supabase/supabase.service';
 
 @Injectable()
 export class CashbackService {
   private readonly CASHBACK_PERCENTAGE = 0.03; // 3%
+  private readonly logger = new Logger(CashbackService.name);
 
   constructor(
     private userService: UserService,
@@ -13,24 +14,34 @@ export class CashbackService {
 
   async processCashback(productId: string, phoneNumber: string) {
     try {
-      // Получаем товар из Supabase
+      this.logger.log(`Processing cashback for productId: ${productId}, phoneNumber: ${phoneNumber}`);
+      
+      // Получаем товар из MockAPI/Supabase
+      this.logger.log('Fetching product from external service...');
       const product = await this.supabaseService.getProductById(productId);
+      this.logger.log(`Product found: ${product.name}, price: ${product.price}`);
       
       // Находим пользователя
-      const user = await this.userService.phoneNumber(phoneNumber);
+      this.logger.log('Finding user by phone number...');
+      const user = await this.userService.findByPhoneNumber(phoneNumber);
       if (!user) {
+        this.logger.warn(`User not found: ${phoneNumber}`);
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
+      this.logger.log(`User found: ${user.name}, current balance: ${user.balance}`);
 
-      // Рассчитываем кешбек (3% от цены товара)
-      const cashbackAmount = product.price * this.CASHBACK_PERCENTAGE;
+      // Рассчитываем кешбек (3% от цены товара) и округляем до 1 знака после запятой
+      const cashbackAmount = Math.round((product.price * this.CASHBACK_PERCENTAGE) * 10) / 10;
+      this.logger.log(`Calculated cashback: ${cashbackAmount} (3% of ${product.price}, rounded to 1 decimal)`);
 
       // Начисляем кешбек пользователю
+      this.logger.log('Adding cashback to user...');
       const result = await this.userService.addCashback(phoneNumber, cashbackAmount, {
         productId: product.id,
         productName: product.name,
-        productPrice: product.price
+        productPrice: product.price // Преобразуем число в строку
       });
+      this.logger.log(`Cashback added successfully. New balance: ${result.user.balance}`);
 
       return {
         statusCode: 200,
@@ -50,10 +61,11 @@ export class CashbackService {
         }
       };
     } catch (error) {
+      this.logger.error(`Failed to process cashback: ${error.message}`, error.stack);
       if (error instanceof HttpException) {
         throw error;
       }
-      throw new HttpException('Failed to process cashback', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(`Failed to process cashback: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
