@@ -12,12 +12,12 @@ async function bootstrap() {
     transform: true,
   }));
   
-  // Настройка CORS
+  // Настройка CORS - для разработки разрешаем все
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    origin: true, // Разрешаем все origin для разработки
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-User-Phone'],
   });
   
   await app.listen(8080);
