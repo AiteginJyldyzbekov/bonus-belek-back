@@ -57,7 +57,7 @@ export class UserService {
         });
     }
 
-    async update(id: number, data: { name?: string; password?: string; role?: 'CLIENT' | 'ADMIN' }) {
+    async update(id: number, data: { name?: string; password?: string; role?: 'CLIENT' | 'ADMIN'; phoneNumber?: string }) {
         return this.prisma.user.update({
             where: { id },
             data,
@@ -75,6 +75,78 @@ export class UserService {
                 password: role === Roles.ADMIN ? "" : null // Только для админов нужен пароль
             });
         }
+
+        return user;
+    }
+
+    async findByPhoneOrName(phoneNumber: string, name: string) {
+        // Ищем пользователя по номеру телефона
+        let user = await this.phoneNumber(phoneNumber);
+        
+        // Если не найден по номеру, ищем по имени (независимо от регистра)
+        if (!user && name) {
+            user = await this.prisma.user.findFirst({
+                where: {
+                    name: {
+                        equals: name,
+                        mode: 'insensitive' // Поиск без учета регистра
+                    }
+                }
+            });
+        }
+
+        return user;
+    }
+
+    async createOrFindByPhoneOrName(phoneNumber: string, name: string, role: Roles) {
+        // Сначала пытаемся найти существующего пользователя по номеру телефона
+        let user = await this.phoneNumber(phoneNumber);
+
+        // Если пользователь найден по номеру телефона, проверяем имя
+        if (user) {
+            // Если у пользователя уже есть имя и оно не совпадает (независимо от регистра), это ошибка
+            if (user.name && user.name.toLowerCase() !== name.toLowerCase()) {
+                throw new HttpException(
+                    `У пользовтеля с этим номером ${phoneNumber} другое имя.`,
+                    HttpStatus.CONFLICT
+                );
+            }
+            // Если у пользователя нет имени, устанавливаем его
+            if (!user.name) {
+                user = await this.update(user.id, {
+                    name: name
+                });
+            }
+            return user;
+        }
+
+        // Если пользователь не найден по номеру, ищем по имени
+        if (name) {
+            const userByName = await this.prisma.user.findFirst({
+                where: {
+                    name: {
+                        equals: name,
+                        mode: 'insensitive' // Поиск без учета регистра
+                    }
+                }
+            });
+
+            if (userByName) {
+                // Если найден пользователь с таким именем, но другим номером телефона
+                throw new HttpException(
+                    `User with name '${name}' already exists with different phone number: ${userByName.phoneNumber}`,
+                    HttpStatus.CONFLICT
+                );
+            }
+        }
+
+        // Если пользователь не найден ни по номеру, ни по имени, создаем нового
+        user = await this.create({
+            phoneNumber,
+            name,
+            role,
+            password: role === Roles.ADMIN ? "" : null // Только для админов нужен пароль
+        });
 
         return user;
     }

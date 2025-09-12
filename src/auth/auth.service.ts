@@ -19,8 +19,13 @@ export class AuthService {
                 throw new HttpException('Invalid phone number format', HttpStatus.BAD_REQUEST);
             }
 
-            // Создаем или находим пользователя
-            const user = await this.userService.createOrFindByPhone(phoneNumber, name, Roles.CLIENT);
+            // Проверяем, что имя не пустое
+            if (!name || name.trim().length === 0) {
+                throw new HttpException('Name is required', HttpStatus.BAD_REQUEST);
+            }
+
+            // Создаем или находим пользователя по номеру телефона или имени
+            const user = await this.userService.createOrFindByPhoneOrName(phoneNumber, name.trim(), Roles.CLIENT);
 
             // Генерируем OTP
             const otpCode = await this.otpService.generateOtp(phoneNumber);
