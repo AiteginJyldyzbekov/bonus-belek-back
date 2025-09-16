@@ -10,17 +10,13 @@ export class CashbackService {
   constructor(
     private userService: UserService,
     private supabaseService: SupabaseService
-  ) {}
+  ) { }
 
-  async processCashback(productId: string, phoneNumber: string) {
+  async processCashback(productIds: string[], phoneNumber: string) {
     try {
-      this.logger.log(`Processing cashback for productId: ${productId}, phoneNumber: ${phoneNumber}`);
-      
-      // Получаем товар из MockAPI/Supabase
-      this.logger.log('Fetching product from external service...');
-      const product = await this.supabaseService.getProductById(productId);
-      this.logger.log(`Product found: ${product.name}, price: ${product.price}`);
-      
+      this.logger.log(`Processing cashback for ${productIds.length} products, phoneNumber: ${phoneNumber}`);
+      this.logger.log(`Product IDs: ${productIds.join(', ')}`);
+
       // Находим пользователя
       this.logger.log('Finding user by phone number...');
       const user = await this.userService.findByPhoneNumber(phoneNumber);
@@ -30,36 +26,86 @@ export class CashbackService {
       }
       this.logger.log(`User found: ${user.name}, current balance: ${user.balance}`);
 
-      // Рассчитываем кешбек (3% от цены товара) и округляем до 1 знака после запятой
-      const cashbackAmount = Math.round((product.price * this.CASHBACK_PERCENTAGE) * 10) / 10;
-      this.logger.log(`Calculated cashback: ${cashbackAmount} (3% of ${product.price}, rounded to 1 decimal)`);
+      const transactions = [];
+      let totalCashback = 0;
+      let successCount = 0;
+      let failedCount = 0;
 
-      // Начисляем кешбек пользователю
-      this.logger.log('Adding cashback to user...');
-      const result = await this.userService.addCashback(phoneNumber, cashbackAmount, {
-        productId: product.id,
-        productName: product.name,
-        productPrice: product.price // Преобразуем число в строку
-      });
-      this.logger.log(`Cashback added successfully. New balance: ${result.user.balance}`);
+      // Проходимся по каждому товару
+      for (let i = 0; i < productIds.length; i++) {
+        const productId = productIds[i];
+        this.logger.log(`Processing product ${i + 1}/${productIds.length}: ${productId}`);
+
+        try {
+          // Получаем товар
+          const product = await this.supabaseService.getProductById(productId);
+          this.logger.log(`Product found: ${product.name}, price: ${product.price}`);
+
+          // Рассчитываем кешбек
+          const cashbackAmount = Math.round((product.price * this.CASHBACK_PERCENTAGE) * 10) / 10;
+          this.logger.log(`Calculated cashback: ${cashbackAmount} (3% of ${product.price}, rounded to 1 decimal)`);
+
+          // Начисляем кешбек пользователю
+          this.logger.log('Adding cashback to user...');
+          const result = await this.userService.addCashback(phoneNumber, cashbackAmount, {
+            productId: product.id,
+            productName: product.name,
+            productPrice: product.price
+          });
+          this.logger.log(`Cashback added successfully for product ${product.name}`);
+
+          // Добавляем в массив успешных транзакций
+          transactions.push({
+            success: true,
+            product: {
+              id: product.id,
+              name: product.name,
+              price: product.price
+            },
+            cashback: {
+              amount: cashbackAmount,
+              percentage: this.CASHBACK_PERCENTAGE * 100
+            },
+            transaction: result.transaction
+          });
+
+          totalCashback += cashbackAmount;
+          successCount++;
+
+        } catch (productError) {
+          this.logger.error(`Failed to process product ${productId}: ${productError.message}`);
+
+          // Добавляем в массив неудачных транзакций
+          transactions.push({
+            success: false,
+            productId: productId,
+            error: productError.message
+          });
+
+          failedCount++;
+        }
+      }
+
+      // Получаем обновленного пользователя
+      const updatedUser = await this.userService.findByPhoneNumber(phoneNumber);
+
+      this.logger.log(`Batch processing completed: ${successCount} successful, ${failedCount} failed, total cashback: ${totalCashback}`);
 
       return {
         statusCode: 200,
-        message: 'Cashback processed successfully',
+        message: `Processed ${successCount}/${productIds.length} products successfully`,
         data: {
-          product: {
-            id: product.id,
-            name: product.name,
-            price: product.price
+          user: updatedUser,
+          summary: {
+            totalProducts: productIds.length,
+            successfulTransactions: successCount,
+            failedTransactions: failedCount,
+            totalCashbackAmount: totalCashback
           },
-          cashback: {
-            amount: cashbackAmount,
-            percentage: this.CASHBACK_PERCENTAGE * 100
-          },
-          user: result.user,
-          transaction: result.transaction
+          transactions
         }
       };
+
     } catch (error) {
       this.logger.error(`Failed to process cashback: ${error.message}`, error.stack);
       if (error instanceof HttpException) {

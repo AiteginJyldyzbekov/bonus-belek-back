@@ -12,9 +12,9 @@ export class CashbackController {
     private supabaseService: SupabaseService
   ) {}
 
-  @Post('products')
+  @Get('products')
   // @UseGuards(AdminGuard) // Временно отключено для тестирования
-  async getProducts(@Body() body: GetProductsDto) {
+  async getProducts() {
     return await this.cashbackService.getProducts();
   }
 

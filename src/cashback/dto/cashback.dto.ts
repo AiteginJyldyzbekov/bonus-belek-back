@@ -1,9 +1,8 @@
 import { IsString, IsNotEmpty, Matches, IsOptional } from 'class-validator';
 
 export class ProcessCashbackDto {
-  @IsString()
   @IsNotEmpty()
-  productId: string;
+  productId: string[];
 
   @IsString()
   @IsNotEmpty()
