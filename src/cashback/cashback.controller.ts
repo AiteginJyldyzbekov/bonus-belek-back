@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, UsePipes, ValidationPipe, HttpException, HttpStatus } from '@nestjs/common';
 import { CashbackService } from './cashback.service';
-import { ProcessCashbackDto, SearchProductsDto, GetProductsDto } from './dto/cashback.dto';
+import { ProcessCashbackDto, SearchProductsDto, GetProductsDto, DeductCashbackDto } from './dto/cashback.dto';
 import { AdminGuard } from '../guards/admin.guard';
 import { SupabaseService } from '../supabase/supabase.service';
 
@@ -28,6 +28,16 @@ export class CashbackController {
   // @UseGuards(AdminGuard) // Временно отключено для тестирования
   async processCashback(@Body() body: ProcessCashbackDto) {
     return await this.cashbackService.processCashback(body.productId, body.phoneNumber);
+  }
+
+  @Post('deduct')
+  // @UseGuards(AdminGuard) // Временно отключено для тестирования
+  async deductCashback(@Body() body: DeductCashbackDto) {
+    const amount = parseFloat(body.amount);
+    if (isNaN(amount) || amount <= 0) {
+      throw new HttpException('Amount must be a positive number', HttpStatus.BAD_REQUEST);
+    }
+    return await this.cashbackService.deductCashback(body.phoneNumber, amount, body.reason);
   }
 
   @Get('health')

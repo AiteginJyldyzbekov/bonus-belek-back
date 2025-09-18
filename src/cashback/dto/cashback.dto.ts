@@ -33,3 +33,20 @@ export class SearchProductsDto {
   })
   phoneNumber?: string;
 }
+
+export class DeductCashbackDto {
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^\+?[1-9]\d{1,14}$/, {
+    message: 'Phone number must be in valid format (e.g., +996701234567)'
+  })
+  phoneNumber: string;
+
+  @IsString()
+  @IsNotEmpty()
+  amount: string; // Передаем как строку для точного парсинга
+
+  @IsString()
+  @IsOptional()
+  reason?: string; // Причина списания (опционально)
+}
