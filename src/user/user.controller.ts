@@ -11,14 +11,14 @@ export class UserController {
         return await this.userService.getBalance(phone);
     }
 
-    @Get(':phone/transactions')
-    async getTransactions(@Param('phone') phone: string) {
-        return await this.userService.getTransactions(phone);
-    }
-
     @Get(':phone/profile')
     async getUserProfile(@Param('phone') phone: string) {
         return await this.userService.getUserProfile(phone);
+    }
+
+    @Get(':phone/transactions')
+    async getTransactions(@Param('phone') phone: string) {
+        return await this.userService.getTransactions(phone);
     }
 
     @Post(':phone/role')
