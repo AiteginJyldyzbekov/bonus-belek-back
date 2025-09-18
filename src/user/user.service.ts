@@ -328,6 +328,65 @@ export class UserService {
         });
     }
 
+    async deductCashback(phoneNumber: string, deductionAmount: number, reason: string = 'Manual deduction') {
+        return await this.prisma.$transaction(async (prisma) => {
+            // Получаем пользователя с блокировкой для обновления
+            const user = await prisma.user.findUnique({
+                where: { phoneNumber },
+                select: { id: true, balance: true, name: true, phoneNumber: true }
+            });
+
+            if (!user) {
+                throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+            }
+
+            const balanceBefore = user.balance;
+            const balanceAfter = balanceBefore - deductionAmount;
+
+            // Проверяем, что баланс не станет отрицательным
+            if (balanceAfter < 0) {
+                throw new HttpException(`Insufficient balance. Current balance: ${balanceBefore}, requested deduction: ${deductionAmount}`, HttpStatus.BAD_REQUEST);
+            }
+
+            // Обновляем баланс пользователя
+            const updatedUser = await prisma.user.update({
+                where: { id: user.id },
+                data: { balance: balanceAfter }
+            });
+
+            // Создаем запись о транзакции списания (с отрицательной суммой)
+            const transaction = await prisma.transaction.create({
+                data: {
+                    userId: user.id,
+                    productId: 'DEDUCTION', // Специальный ID для операций списания
+                    productName: reason, // Причина списания
+                    productPrice: 0, // Для списания цена товара не применима
+                    cashbackAmount: -deductionAmount, // Отрицательная сумма для списания
+                    balanceBefore,
+                    balanceAfter
+                }
+            });
+
+            this.logger.log(`Deducted ${deductionAmount} from user ${phoneNumber}. Balance: ${balanceBefore} -> ${balanceAfter}`);
+
+            return {
+                user: {
+                    id: updatedUser.id,
+                    phoneNumber: updatedUser.phoneNumber,
+                    name: updatedUser.name,
+                    balance: updatedUser.balance
+                },
+                transaction: {
+                    id: transaction.id,
+                    cashbackAmount: transaction.cashbackAmount,
+                    balanceBefore: transaction.balanceBefore,
+                    balanceAfter: transaction.balanceAfter,
+                    createdAt: transaction.createdAt
+                }
+            };
+        });
+    }
+
     async setUserRole(phoneNumber: string, role: 'CLIENT' | 'ADMIN') {
         const user = await this.phoneNumber(phoneNumber);
 
