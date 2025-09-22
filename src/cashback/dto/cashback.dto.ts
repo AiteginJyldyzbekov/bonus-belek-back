@@ -1,17 +1,20 @@
 import { IsString, IsNotEmpty, Matches, IsOptional, IsNumber, Min } from 'class-validator';
 
+export class productIds {
+  @IsNotEmpty()
+  id: string;
+
+  @IsOptional()
+  customPrice: number
+}
+
 export class ProcessCashbackDto {
   @IsNotEmpty()
-  productId: string[];
+  productId: productIds[];
 
   @IsString()
   @IsNotEmpty()
   phoneNumber: string;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0, { message: 'Custom price must be greater than or equal to 0' })
-  customPrice?: number;
 }
 
 export class GetProductsDto {

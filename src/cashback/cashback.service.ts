@@ -1,6 +1,7 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { UserService } from '../user/user.service';
 import { SupabaseService } from '../supabase/supabase.service';
+import { productIds } from './dto/cashback.dto';
 
 @Injectable()
 export class CashbackService {
@@ -13,16 +14,12 @@ export class CashbackService {
   ) { }
 
   async processCashback(
-    productIds: string[],
+    productIds: productIds[],
     phoneNumber: string,
-    customPrice?: number
   ) {
     try {
       this.logger.log(`Processing cashback for ${productIds.length} products, phoneNumber: ${phoneNumber}`);
       this.logger.log(`Product IDs: ${productIds.join(', ')}`);
-      if (customPrice !== undefined) {
-        this.logger.log(`Custom price provided: ${customPrice}`);
-      }
 
       // Находим пользователя
       this.logger.log('Finding user by phone number...');
@@ -46,12 +43,12 @@ export class CashbackService {
         try {
           // Получаем товар из MockAPI/Supabase
           this.logger.log('Fetching product from external service...');
-          const product = await this.supabaseService.getProductById(productId);
+          const product = await this.supabaseService.getProductById(productId.id);
 
           // Используем кастомную цену если передана, иначе цену из базы
-          const priceToUse = customPrice !== undefined ? customPrice : product.price;
+          const priceToUse = productId.customPrice !== undefined ? productId.customPrice : product.price;
 
-          this.logger.log(`Product found: ${product.name}, original price: ${product.price}${customPrice !== undefined ? `, using custom price: ${customPrice}` : ', using original price'}`);
+          this.logger.log(`Product found: ${product.name}, original price: ${product.price}${productId.customPrice !== undefined ? `, using custom price: ${productId.customPrice}` : ', using original price'}`);
 
           // Рассчитываем кешбек (3% от цены товара) и округляем до 1 знака после запятой
           const cashbackAmount = Math.round((priceToUse * this.CASHBACK_PERCENTAGE) * 10) / 10;
@@ -74,7 +71,7 @@ export class CashbackService {
               name: product.name,
               price: priceToUse,
               originalPrice: product.price,
-              isCustomPrice: customPrice !== undefined
+              isCustomPrice: productId.customPrice !== undefined
             },
             cashback: {
               amount: cashbackAmount,
