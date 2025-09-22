@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, Matches, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, Matches, IsOptional, IsNumber, Min } from 'class-validator';
 
 export class ProcessCashbackDto {
   @IsNotEmpty()
@@ -6,10 +6,12 @@ export class ProcessCashbackDto {
 
   @IsString()
   @IsNotEmpty()
-  @Matches(/^\+?[1-9]\d{1,14}$/, {
-    message: 'Phone number must be in valid format (e.g., +996701234567)'
-  })
   phoneNumber: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0, { message: 'Custom price must be greater than or equal to 0' })
+  customPrice?: number;
 }
 
 export class GetProductsDto {
