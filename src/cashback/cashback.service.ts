@@ -10,17 +10,24 @@ export class CashbackService {
   constructor(
     private userService: UserService,
     private supabaseService: SupabaseService
-  ) {}
+  ) { }
 
-  async processCashback(productId: string, phoneNumber: string) {
+  async processCashback(
+    productId: string,
+    phoneNumber: string,
+    customPrice?: number
+  ) {
     try {
-      this.logger.log(`Processing cashback for productId: ${productId}, phoneNumber: ${phoneNumber}`);
-      
+      this.logger.log(`Processing cashback for productId: ${productId}, phoneNumber: ${phoneNumber}${customPrice !== undefined ? `, customPrice: ${customPrice}` : ''}`);
+
       // Получаем товар из MockAPI/Supabase
       this.logger.log('Fetching product from external service...');
       const product = await this.supabaseService.getProductById(productId);
-      this.logger.log(`Product found: ${product.name}, price: ${product.price}`);
-      
+
+      // Используем кастомную цену если передана, иначе цену из базы
+      const priceToUse = customPrice !== undefined ? customPrice : product.price;
+      this.logger.log(`Product found: ${product.name}, original price: ${product.price}${customPrice !== undefined ? `, using custom price: ${customPrice}` : ', using original price'}`);
+
       // Находим пользователя
       this.logger.log('Finding user by phone number...');
       const user = await this.userService.findByPhoneNumber(phoneNumber);
@@ -31,16 +38,17 @@ export class CashbackService {
       this.logger.log(`User found: ${user.name}, current balance: ${user.balance}`);
 
       // Рассчитываем кешбек (3% от цены товара) и округляем до 1 знака после запятой
-      const cashbackAmount = Math.round((product.price * this.CASHBACK_PERCENTAGE) * 10) / 10;
-      this.logger.log(`Calculated cashback: ${cashbackAmount} (3% of ${product.price}, rounded to 1 decimal)`);
+      const cashbackAmount = Math.round((priceToUse * this.CASHBACK_PERCENTAGE) * 10) / 10;
+      this.logger.log(`Calculated cashback: ${cashbackAmount} (3% of ${priceToUse}, rounded to 1 decimal)`);
 
       // Начисляем кешбек пользователю
       this.logger.log('Adding cashback to user...');
       const result = await this.userService.addCashback(phoneNumber, cashbackAmount, {
         productId: product.id,
         productName: product.name,
-        productPrice: product.price // Преобразуем число в строку
+        productPrice: priceToUse // Используем цену которая была использована для расчета
       });
+
       this.logger.log(`Cashback added successfully. New balance: ${result.user.balance}`);
 
       return {
@@ -50,7 +58,7 @@ export class CashbackService {
           product: {
             id: product.id,
             name: product.name,
-            price: product.price
+            price: priceToUse
           },
           cashback: {
             amount: cashbackAmount,
@@ -98,7 +106,7 @@ export class CashbackService {
   async deductCashback(phoneNumber: string, amount: number, reason?: string) {
     try {
       this.logger.log(`Processing cashback deduction for phoneNumber: ${phoneNumber}, amount: ${amount}`);
-      
+
       // Валидируем сумму списания
       if (amount <= 0) {
         throw new HttpException('Deduction amount must be positive', HttpStatus.BAD_REQUEST);
