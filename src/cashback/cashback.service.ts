@@ -15,7 +15,7 @@ export class CashbackService {
 async processCashback(
   productIds: string[], 
   phoneNumber: string, 
-  customPrices?: { [productId: string]: number }
+  customPrices?: number
 ) {
   try {
     this.logger.log(`Processing cashback for ${productIds.length} products, phoneNumber: ${phoneNumber}`);
