@@ -37,6 +37,7 @@ model Transaction {
   userId         Int
   productId      String
   productName    String
+  paymentType    String?
   productPrice   Float
   cashbackAmount Float
   balanceBefore  Float

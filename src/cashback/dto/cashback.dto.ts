@@ -8,7 +8,26 @@ export class productIds {
   customPrice: number
 }
 
+export class ProcessDirectCashbackDto {
+  @IsString()
+  @IsNotEmpty()
+  phoneNumber: string;
+
+  @IsNotEmpty()
+  @IsString()
+  paymentType: string;
+
+  @IsNotEmpty()
+  products: {
+    name: string;
+    price: number;
+  }[];
+}
+
 export class ProcessCashbackDto {
+  @IsString()
+  paymentType: string;
+
   @IsNotEmpty()
   productId: productIds[];
 

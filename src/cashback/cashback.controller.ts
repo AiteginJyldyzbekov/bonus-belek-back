@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, Query, UseGuards, UsePipes, ValidationPipe, HttpException, HttpStatus } from '@nestjs/common';
 import { CashbackService } from './cashback.service';
-import { ProcessCashbackDto, SearchProductsDto, GetProductsDto, DeductCashbackDto } from './dto/cashback.dto';
+import { ProcessCashbackDto, SearchProductsDto, GetProductsDto, DeductCashbackDto, ProcessDirectCashbackDto } from './dto/cashback.dto';
 import { AdminGuard } from '../guards/admin.guard';
 import { SupabaseService } from '../supabase/supabase.service';
 
@@ -10,7 +10,7 @@ export class CashbackController {
   constructor(
     private cashbackService: CashbackService,
     private supabaseService: SupabaseService
-  ) {}
+  ) { }
 
   @Get('products')
   // @UseGuards(AdminGuard) // Временно отключено для тестирования
@@ -27,7 +27,17 @@ export class CashbackController {
   @Post('process')
   // @UseGuards(AdminGuard) // Временно отключено для тестирования
   async processCashback(@Body() body: ProcessCashbackDto) {
-    return await this.cashbackService.processCashback(body.productId, body.phoneNumber);
+    return await this.cashbackService.processCashback(body.productId, body.phoneNumber,  body.paymentType);
+  }
+
+  @Post('process-direct')
+  // @UseGuards(AdminGuard) // Временно отключено для тестирования
+  async processDirectCashback(@Body() body: ProcessDirectCashbackDto) {
+    return await this.cashbackService.processDirectCashback(
+      body.products,
+      body.phoneNumber,
+      body.paymentType
+    );
   }
 
   @Post('deduct')

@@ -82,7 +82,7 @@ export class UserService {
     async findByPhoneOrName(phoneNumber: string, name: string) {
         // Ищем пользователя по номеру телефона
         let user = await this.phoneNumber(phoneNumber);
-        
+
         // Если не найден по номеру, ищем по имени (независимо от регистра)
         if (!user && name) {
             user = await this.prisma.user.findFirst({
@@ -220,7 +220,7 @@ export class UserService {
         const totalTransactions = transactions.length;
         const totalCashbackEarned = transactions.reduce((sum, transaction) => sum + transaction.cashbackAmount, 0);
         const totalSpent = transactions.reduce((sum, transaction) => sum + transaction.productPrice, 0);
-        
+
         // Получаем последнюю транзакцию
         const lastTransaction = transactions.length > 0 ? transactions[0] : null;
 
@@ -276,6 +276,7 @@ export class UserService {
         productId: string;
         productName: string;
         productPrice: number;
+        paymentType?: string; // Делаем опциональным для обратной совместимости
     }) {
         return await this.prisma.$transaction(async (prisma) => {
             // Получаем пользователя с блокировкой для обновления
@@ -303,7 +304,8 @@ export class UserService {
                     userId: user.id,
                     productId: productData.productId,
                     productName: productData.productName,
-                    productPrice: productData.productPrice, // Преобразуем строку в число
+                    productPrice: productData.productPrice,
+                    paymentType: productData.paymentType, // Добавляем paymentType
                     cashbackAmount,
                     balanceBefore,
                     balanceAfter
@@ -322,6 +324,7 @@ export class UserService {
                     cashbackAmount: transaction.cashbackAmount,
                     balanceBefore: transaction.balanceBefore,
                     balanceAfter: transaction.balanceAfter,
+                    paymentType: transaction.paymentType, // Добавляем в ответ
                     createdAt: transaction.createdAt
                 }
             };
