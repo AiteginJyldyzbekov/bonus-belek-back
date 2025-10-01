@@ -27,7 +27,7 @@ export class CashbackController {
   @Post('process')
   // @UseGuards(AdminGuard) // Временно отключено для тестирования
   async processCashback(@Body() body: ProcessCashbackDto) {
-    return await this.cashbackService.processCashback(body.productId, body.phoneNumber,  body.paymentType);
+    return await this.cashbackService.processCashback(body.productIds, body.phoneNumber,  body.paymentType);
   }
 
   @Post('process-direct')

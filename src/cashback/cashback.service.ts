@@ -1,7 +1,7 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { UserService } from '../user/user.service';
 import { SupabaseService } from '../supabase/supabase.service';
-import { productIds } from './dto/cashback.dto';
+import { ProductIdDto } from './dto/cashback.dto';
 
 @Injectable()
 export class CashbackService {
@@ -14,16 +14,14 @@ export class CashbackService {
   ) { }
 
   async processCashback(
-    productIds: productIds[],
+    productIds: { productId: string; customPrice?: number }[],
     phoneNumber: string,
     paymentType: string
   ) {
     try {
       this.logger.log(`Processing cashback for ${productIds.length} products, phoneNumber: ${phoneNumber}`);
-      this.logger.log(`Product IDs: ${productIds.join(', ')}`);
 
       // Находим пользователя
-      this.logger.log('Finding user by phone number...');
       const user = await this.userService.findByPhoneNumber(phoneNumber);
       if (!user) {
         this.logger.warn(`User not found: ${phoneNumber}`);
@@ -38,31 +36,38 @@ export class CashbackService {
 
       // Проходимся по каждому товару
       for (let i = 0; i < productIds.length; i++) {
-        const productId = productIds[i];
+        const { productId, customPrice } = productIds[i];
         this.logger.log(`Processing product ${i + 1}/${productIds.length}: ${productId}`);
 
         try {
-          // Получаем товар из MockAPI/Supabase
-          this.logger.log('Fetching product from external service...');
-          const product = await this.supabaseService.getProductById(productId.id);
+          // Получаем товар из Supabase
+          this.logger.log('Fetching product from Supabase...');
+          const product = await this.supabaseService.getProductById(productId);
+
+          if (!product) {
+            throw new Error(`Product not found: ${productId}`);
+          }
 
           // Используем кастомную цену если передана, иначе цену из базы
-          const priceToUse = productId.customPrice !== undefined ? productId.customPrice : product.price;
+          const priceToUse = customPrice !== undefined ? customPrice : product.price;
 
-          this.logger.log(`Product found: ${product.name}, original price: ${product.price}${productId.customPrice !== undefined ? `, using custom price: ${productId.customPrice}` : ', using original price'}`);
+          this.logger.log(
+            `Product found: ${product.name}, original price: ${product.price}${customPrice !== undefined ? `, using custom price: ${customPrice}` : ', using original price'
+            }`
+          );
 
           // Рассчитываем кешбек (3% от цены товара) и округляем до 1 знака после запятой
           const cashbackAmount = Math.round((priceToUse * this.CASHBACK_PERCENTAGE) * 10) / 10;
           this.logger.log(`Calculated cashback: ${cashbackAmount} (3% of ${priceToUse}, rounded to 1 decimal)`);
 
           // Начисляем кешбек пользователю
-          this.logger.log('Adding cashback to user...');
           const result = await this.userService.addCashback(phoneNumber, cashbackAmount, {
             productId: product.id,
             productName: product.name,
-            paymentType: paymentType,
-            productPrice: priceToUse // Используем цену которая была использована для расчета
+            paymentType,
+            productPrice: priceToUse
           });
+
           this.logger.log(`Cashback added successfully for product ${product.name}`);
 
           // Добавляем в массив успешных транзакций
@@ -73,28 +78,27 @@ export class CashbackService {
               name: product.name,
               price: priceToUse,
               originalPrice: product.price,
-              isCustomPrice: productId.customPrice !== undefined
+              isCustomPrice: customPrice !== undefined
             },
             cashback: {
               amount: cashbackAmount,
               percentage: this.CASHBACK_PERCENTAGE * 100
             },
             transaction: result.transaction,
-            paymentType: paymentType
+            paymentType
           });
 
           totalCashback += cashbackAmount;
           successCount++;
-
         } catch (productError) {
           this.logger.error(`Failed to process product ${productId}: ${productError.message}`);
 
           // Добавляем в массив неудачных транзакций
           transactions.push({
             success: false,
-            productId: productId,
+            productId,
             error: productError.message,
-            paymentType: paymentType
+            paymentType
           });
 
           failedCount++;
@@ -104,7 +108,9 @@ export class CashbackService {
       // Получаем обновленного пользователя
       const updatedUser = await this.userService.findByPhoneNumber(phoneNumber);
 
-      this.logger.log(`Batch processing completed: ${successCount} successful, ${failedCount} failed, total cashback: ${totalCashback}`);
+      this.logger.log(
+        `Batch processing completed: ${successCount} successful, ${failedCount} failed, total cashback: ${totalCashback}`
+      );
 
       return {
         statusCode: 200,
@@ -116,12 +122,11 @@ export class CashbackService {
             successfulTransactions: successCount,
             failedTransactions: failedCount,
             totalCashbackAmount: totalCashback,
-            paymentType:paymentType
+            paymentType
           },
           transactions
         }
       };
-
     } catch (error) {
       this.logger.error(`Failed to process cashback: ${error.message}`, error.stack);
       if (error instanceof HttpException) {
@@ -172,23 +177,21 @@ export class CashbackService {
             productId: "Продукт созданный в ручную в админке бонуса",
             productName: product.name,
             productPrice: product.price,
-            paymentType: paymentType // Добавляем тип оплаты
+            paymentType: paymentType
           });
           this.logger.log(`Cashback added successfully for product ${product.name}`);
 
-          // Добавляем в массив успешных транзакций
+          // Добавляем в массив успешных транзакций с полными данными
           transactions.push({
-            success: true,
-            product: {
-              name: product.name,
-              price: product.price
-            },
-            cashback: {
-              amount: cashbackAmount,
-              percentage: this.CASHBACK_PERCENTAGE * 100
-            },
-            paymentType: paymentType,
-            transaction: result.transaction
+            id: result.transaction.id,
+            productId: "Продукт созданный в ручную в админке бонуса",
+            productName: product.name,
+            productPrice: product.price,
+            cashbackAmount: cashbackAmount,
+            balanceBefore: result.transaction.balanceBefore,
+            balanceAfter: result.transaction.balanceAfter,
+            createdAt: result.transaction.createdAt,
+            paymentType: paymentType
           });
 
           totalCashback += cashbackAmount;
@@ -218,7 +221,15 @@ export class CashbackService {
         statusCode: 200,
         message: `Processed ${successCount}/${products.length} products successfully`,
         data: {
-          user: updatedUser,
+          user: {
+            id: updatedUser.id,
+            phoneNumber: updatedUser.phoneNumber,
+            name: updatedUser.name,
+            role: updatedUser.role,
+            balance: updatedUser.balance,
+            createdAt: updatedUser.createdAt,
+            updatedAt: updatedUser.updatedAt
+          },
           summary: {
             totalProducts: products.length,
             successfulTransactions: successCount,
@@ -238,7 +249,6 @@ export class CashbackService {
       throw new HttpException(`Failed to process direct cashback: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
-
   async getProducts() {
     try {
       const products = await this.supabaseService.getAllProducts();

@@ -1,11 +1,24 @@
-import { IsString, IsNotEmpty, Matches, IsOptional, IsNumber, Min } from 'class-validator';
+import { IsString, IsNotEmpty, Matches, IsOptional, IsNumber, Min, ValidateNested } from 'class-validator';
 
-export class productIds {
+export class ProductIdDto {
   @IsNotEmpty()
-  id: string;
+  productId: string;
 
   @IsOptional()
-  customPrice: number
+  @IsNumber()
+  customPrice?: number;
+}
+
+export class ProcessCashbackDto {
+  @IsString()
+  paymentType: string;
+
+  @IsNotEmpty()
+  productIds: ProductIdDto[];
+
+  @IsString()
+  @IsNotEmpty()
+  phoneNumber: string;
 }
 
 export class ProcessDirectCashbackDto {
@@ -22,18 +35,6 @@ export class ProcessDirectCashbackDto {
     name: string;
     price: number;
   }[];
-}
-
-export class ProcessCashbackDto {
-  @IsString()
-  paymentType: string;
-
-  @IsNotEmpty()
-  productId: productIds[];
-
-  @IsString()
-  @IsNotEmpty()
-  phoneNumber: string;
 }
 
 export class GetProductsDto {

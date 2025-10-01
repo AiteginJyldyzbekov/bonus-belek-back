@@ -212,7 +212,8 @@ export class UserService {
                 cashbackAmount: true,
                 balanceBefore: true,
                 balanceAfter: true,
-                createdAt: true
+                createdAt: true,
+                paymentType: true
             }
         });
 
